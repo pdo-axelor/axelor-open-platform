@@ -26,6 +26,7 @@ import com.axelor.common.reflections.Reflections;
 import com.axelor.i18n.I18nBundle;
 import com.axelor.inject.Beans;
 import com.axelor.meta.MetaStore;
+import com.google.common.collect.ImmutableSet;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -69,13 +70,15 @@ public final class ViewWatcher {
 
   private static ViewWatcher instance;
   private static ModuleManager moduleManager;
+  private static final Set<String> moduleNames = ImmutableSet.copyOf(ModuleManager.getResolution());
 
   private WatchService watcher;
   private final Map<WatchKey, Path> keys = new HashMap<>();
   private final List<ViewChangeEvent> pending = new ArrayList<>();
 
   private static final long UPDATE_DELAY = 200;
-  private static final Pattern moduleNamePattern = Pattern.compile("\\w*(-[a-z]\\w*)*");
+  private static final Pattern moduleNamePattern =
+      Pattern.compile("(?:[a-z0-9_]+(?:\\.[a-z0-9_]+)+-)?(\\w*(-[a-z]\\w*)*)");
   private Set<String> pendingModules;
   private Set<Path> pendingPaths;
   private ScheduledExecutorService scheduler;
@@ -198,7 +201,13 @@ public final class ViewWatcher {
       return;
     }
 
-    moduleName = moduleNameMatcher.group();
+    moduleName = moduleNameMatcher.group(1);
+
+    if (!moduleNames.contains(moduleName)) {
+      log.error("Module not found: {}", moduleName);
+      return;
+    }
+
     addPending(moduleName, path);
   }
 
