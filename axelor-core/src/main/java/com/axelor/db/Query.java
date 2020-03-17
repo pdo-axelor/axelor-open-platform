@@ -719,6 +719,7 @@ public class Query<T extends Model> {
     private List<String> collections = Lists.newArrayList();
     private String query;
     private Mapper mapper = Mapper.of(beanClass);
+    private final List<String> transientNames = new ArrayList<>();
 
     private Selector(String... names) {
       List<String> selects = Lists.newArrayList();
@@ -726,24 +727,26 @@ public class Query<T extends Model> {
       selects.add("self.version");
       for (String name : names) {
         Property property = getProperty(name);
-        if (property != null
-            && property.getType() != PropertyType.BINARY
-            && !property.isTransient()) {
-          String alias = joinHelper.joinName(name);
-          if (alias != null) {
-            selects.add(alias);
-            this.names.add(name);
+        if (property != null && property.getType() != PropertyType.BINARY) {
+          if (property.isTransient()) {
+            transientNames.add(property.getName());
           } else {
-            collections.add(name);
-          }
-          // select id,version,name field for m2o
-          if (property.isReference() && property.getTargetName() != null) {
-            this.names.add(name + ".id");
-            this.names.add(name + ".version");
-            this.names.add(name + "." + property.getTargetName());
-            selects.add(joinHelper.joinName(name + ".id"));
-            selects.add(joinHelper.joinName(name + ".version"));
-            selects.add(joinHelper.joinName(name + "." + property.getTargetName()));
+            String alias = joinHelper.joinName(name);
+            if (alias != null) {
+              selects.add(alias);
+              this.names.add(name);
+            } else {
+              collections.add(name);
+            }
+            // select id,version,name field for m2o
+            if (property.isReference() && property.getTargetName() != null) {
+              this.names.add(name + ".id");
+              this.names.add(name + ".version");
+              this.names.add(name + "." + property.getTargetName());
+              selects.add(joinHelper.joinName(name + ".id"));
+              selects.add(joinHelper.joinName(name + ".version"));
+              selects.add(joinHelper.joinName(name + "." + property.getTargetName()));
+            }
           }
         } else if (name.indexOf('.') > -1) {
           final JsonFunction func = JsonFunction.fromPath(name);
@@ -757,6 +760,12 @@ public class Query<T extends Model> {
 
       if (joinHelper.hasCollection) {
         orderNames.stream().filter(n -> !selects.contains(n)).forEach(selects::add);
+      }
+
+      // Add model as last select item if there are any transient fields selected,
+      // so that entity listener is called if there is one.
+      if (!transientNames.isEmpty()) {
+        selects.add("self");
       }
 
       StringBuilder sb =
@@ -828,6 +837,16 @@ public class Query<T extends Model> {
         }
         if (collections.size() > 0) {
           map.putAll(this.fetchCollections(items.get(0)));
+        }
+        if (!transientNames.isEmpty()) {
+          // Model was added as last element of the selected items.
+          // Retrieve transient fields from initialized model.
+          final Object model = items.get(items.size() - 1);
+          transientNames.stream()
+              .forEach(
+                  name -> {
+                    map.put(name, mapper.get(model, name));
+                  });
         }
         result.add(map);
       }
