@@ -1580,13 +1580,38 @@ ui.directive('uiViewForm', ['$compile', 'ViewService', function($compile, ViewSe
         return true;
       });
       var items = elems.map(function () {
+        var elemScope = $(this).scope();
         return {
           name: $(this).attr('x-field'),
-          title: $(this).attr('x-title')
+          title: $(this).attr('x-title'),
+          path: $(this).attr('x-path'),
+          showTitle: $(this).attr('x-show-title') !== 'false',
+          hidden: elemScope.isHidden && elemScope.isHidden()
         };
       });
 
-      items = _.unique(_.compact(items), function (item) { return item.name; });
+      items = _.unique(_.compact(items), function (item) { return item.path; });
+
+      // Force titles depending on showTitle attributes
+      _.each(items, function (item, index) {
+        _.each(items.slice(index + 1), function (elem) {
+          if (elem.hidden || !_.startsWith(elem.path, item.path + '.')) {
+            return;
+          }
+          if (!elem.showTitle) {
+            elem.forcedTitle = item.showTitle ? item.title : elem.title;
+          } else if (!item.showTitle) {
+            elem.forcedTitle = elem.title;
+          }
+        });
+      })
+
+      // Filter out parent items
+      items = _.filter(items, function (item, index) {
+        return _.all(items.slice(index + 1), function (elem) {
+          return !_.startsWith(elem.path, item.path + '.');
+        });
+      });
 
       if (items.length === 0) {
         return;
@@ -1602,14 +1627,24 @@ ui.directive('uiViewForm', ['$compile', 'ViewService', function($compile, ViewSe
       }
 
       items = _.map(items, function(item) {
-        var value = item.title;
-        if (item.name) {
-          value = translatted[item.name] || value;
+        var value = item.forcedTitle;
+        if (!value) {
+          value = item.path
+          if (value && value.indexOf('.') >= 0) {
+            value = _.map(value.split('.'), function (part) {
+              return translatted[part];
+            }).join(' → ');
+          } else {
+            value = item.title;
+            if (item.name) {
+              value = translatted[item.name] || value;
+            }
+          }
         }
         return '<li>' + value + '</li>';
       });
 
-      items = '<ul>' + items.join('') + '</ul>';
+      items = '<ul>' + _.unique(items).join('') + '</ul>';
 
       axelor.notify.error(items, {
         title: _t("The following fields are invalid:")
