@@ -1573,8 +1573,8 @@ ui.directive('uiViewForm', ['$compile', 'ViewService', function($compile, ViewSe
           return false;
         }
         var elemScope = $(this).scope();
-        if (elemScope.isHidden &&
-          elemScope.isHidden()) {
+        if (elemScope.isHidden && elemScope.isHidden()
+            && (!elemScope.isRequired || !elemScope.isRequired())) {
           return false;
         }
         return true;
