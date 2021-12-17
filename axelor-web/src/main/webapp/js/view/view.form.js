@@ -1572,11 +1572,6 @@ ui.directive('uiViewForm', ['$compile', 'ViewService', function($compile, ViewSe
         if (detailScope && !detailScope.visible) {
           return false;
         }
-        var elemScope = $(this).scope();
-        if (elemScope.isHidden && elemScope.isHidden()
-            && (!elemScope.isRequired || !elemScope.isRequired())) {
-          return false;
-        }
         return true;
       });
       var items = elems.map(function () {
