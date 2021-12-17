@@ -1,3 +1,5 @@
 ---
-title: Show error notice for hidden invalid fields upon saving
+title: Fix no error notice when there are only hidden invalid fields upon saving
 type: fix
+description: |
+  Full technical paths of hidden invalid fields are logged in web console in dev mode.
