@@ -128,7 +128,10 @@ public class ViewLoader extends AbstractParallelLoader {
   protected void doLast(Module module, boolean update) {
     // generate default views
     importDefault(module);
+  }
 
+  @Transactional
+  protected void doLastOnce(boolean update) {
     runResolveTasks();
 
     Set<?> unresolved = this.unresolvedKeys();

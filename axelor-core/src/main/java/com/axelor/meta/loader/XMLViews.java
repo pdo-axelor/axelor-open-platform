@@ -29,6 +29,7 @@ import com.axelor.common.StringUtils;
 import com.axelor.db.JPA;
 import com.axelor.db.Query;
 import com.axelor.db.internal.DBHelper;
+import com.axelor.db.tenants.TenantAware;
 import com.axelor.inject.Beans;
 import com.axelor.meta.db.MetaAction;
 import com.axelor.meta.db.MetaModel;
@@ -79,9 +80,14 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -1265,7 +1271,7 @@ public class XMLViews {
 
     @Transactional
     public long generate(Collection<String> names, boolean update) {
-      final long count = generate(findForCompute(names, update));
+      final long count = parallelGenerate(names, update);
 
       if (count == 0L && ObjectUtils.notEmpty(names)) {
         metaViewRepo
@@ -1276,6 +1282,54 @@ public class XMLViews {
       }
 
       return count;
+    }
+
+    private long parallelGenerate(Collection<String> names, boolean update) {
+      final int fetchSize = DBHelper.getJdbcFetchSize();
+      final int numWorkers = DBHelper.getMaxWorkers();
+      final int increment = fetchSize * numWorkers;
+      final Long[] counts = new Long[numWorkers];
+      final List<Future<?>> futures = new ArrayList<>(numWorkers);
+      final ExecutorService executor = Executors.newFixedThreadPool(numWorkers);
+
+      try {
+        IntStream.range(0, numWorkers)
+            .forEach(
+                index ->
+                    futures.add(
+                        executor.submit(
+                            new TenantAware(
+                                () -> {
+                                  int offset = fetchSize * index;
+                                  final TypedQuery<MetaView> query = findForCompute(names, update);
+                                  query.setMaxResults(fetchSize);
+
+                                  long count = 0;
+                                  List<MetaView> views;
+                                  while (!(views = fetch(query, offset)).isEmpty()) {
+                                    count += generate(views);
+                                    offset += increment;
+                                  }
+
+                                  counts[index] = count;
+                                }))));
+      } finally {
+        executor.shutdown();
+      }
+
+      futures.forEach(
+          future -> {
+            try {
+              future.get();
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+              throw new RuntimeException(e);
+            } catch (ExecutionException e) {
+              throw new RuntimeException(e.getCause());
+            }
+          });
+
+      return Arrays.stream(counts).collect(Collectors.summingLong(Long::longValue));
     }
 
     @Transactional

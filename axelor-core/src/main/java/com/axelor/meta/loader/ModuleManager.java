@@ -144,6 +144,7 @@ public class ModuleManager {
                     .forEach(this::uninstall);
               });
     } finally {
+      viewLoader.doLastOnce(update);
       this.encryptPasswords();
       this.doCleanUp();
     }
@@ -176,6 +177,7 @@ public class ModuleManager {
           .filter(m -> names.contains(m.getName()))
           .forEach(m -> viewLoader.doLast(m, true));
     } finally {
+      viewLoader.doLastOnce(true);
       this.doCleanUp();
     }
   }
@@ -193,6 +195,7 @@ public class ModuleManager {
       moduleList.forEach(m -> install(m, true, false));
       moduleList.forEach(m -> viewLoader.doLast(m, true));
     } finally {
+      viewLoader.doLastOnce(true);
       pathsToRestore.clear();
       doCleanUp(startTime);
     }
@@ -242,6 +245,7 @@ public class ModuleManager {
           .forEach(name -> install(name, update, withDemo, true));
       resolver.resolve(moduleName).stream().forEach(m -> viewLoader.doLast(m, update));
     } finally {
+      viewLoader.doLastOnce(update);
       this.doCleanUp();
     }
   }
